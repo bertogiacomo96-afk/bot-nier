@@ -1,6 +1,7 @@
 import random
 import json
 import os
+import html
 import httpx
 from datetime import date, time
 from zoneinfo import ZoneInfo
@@ -48,7 +49,6 @@ def giorni_al_concerto():
     return (DATA_CONCERTO - date.today()).days
 
 async def get_youtube_title(url):
-    """Recupera il titolo del video YouTube tramite oEmbed (nessuna API key)."""
     try:
         async with httpx.AsyncClient() as client:
             r = await client.get(
@@ -58,13 +58,12 @@ async def get_youtube_title(url):
             )
             return r.json().get("title", url)
     except Exception:
-        return url  # fallback all'URL se non riesce
+        return url
 
 
 # ---------- job automatici ----------
 
 async def buongiorno(context):
-    """Ogni giorno alle 13:00 ora italiana: conto alla rovescia + canzone del giorno."""
     songs = load_songs()
     if not songs:
         return
@@ -77,32 +76,31 @@ async def buongiorno(context):
     save_progress(progress)
 
     giorni = giorni_al_concerto()
-    titolo = await get_youtube_title(url)
+    titolo = html.escape(await get_youtube_title(url))
 
     testo = (
-        f"🌅 Buongiorno! Mancano *{giorni} giorni* al concerto!\n\n"
-        f"🎵 La canzone di oggi:\n*{titolo}*\n{url}"
+        f"🌅 Buongiorno! Mancano <b>{giorni} giorni</b> al concerto!\n\n"
+        f"🎵 La canzone di oggi:\n<b>{titolo}</b>\n{url}"
     )
     await context.bot.send_message(
         chat_id=GROUP_CHAT_ID,
         text=testo,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 
 async def invia_roulette(context):
-    """Viene eseguito automaticamente ogni INTERVALLO_MINUTI."""
     songs = load_songs()
     if not songs:
         return
 
     url    = random.choice(songs)
-    titolo = await get_youtube_title(url)
+    titolo = html.escape(await get_youtube_title(url))
 
     await context.bot.send_message(
         chat_id=GROUP_CHAT_ID,
-        text=f"🎲 *Roulette musicale:*\n*{titolo}*\n{url}",
-        parse_mode="Markdown"
+        text=f"🎲 <b>Roulette musicale:</b>\n{titolo}\n{url}",
+        parse_mode="HTML"
     )
 
 
@@ -121,12 +119,12 @@ async def canzone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     progress["index"] = index + 1
     save_progress(progress)
 
-    titolo = await get_youtube_title(url)
+    titolo = html.escape(await get_youtube_title(url))
 
     await context.bot.send_message(
         chat_id=GROUP_CHAT_ID,
-        text=f"🎵 *Canzone del giorno* ({index + 1}/{len(songs)}):\n*{titolo}*\n{url}",
-        parse_mode="Markdown"
+        text=f"🎵 <b>Canzone del giorno</b> ({index + 1}/{len(songs)}):\n{titolo}\n{url}",
+        parse_mode="HTML"
     )
 
     if update.effective_chat.id != GROUP_CHAT_ID:
@@ -140,12 +138,12 @@ async def random_song(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     url    = random.choice(songs)
-    titolo = await get_youtube_title(url)
+    titolo = html.escape(await get_youtube_title(url))
 
     await context.bot.send_message(
         chat_id=GROUP_CHAT_ID,
-        text=f"🎲 *Canzone casuale:*\n*{titolo}*\n{url}",
-        parse_mode="Markdown"
+        text=f"🎲 <b>Canzone casuale:</b>\n{titolo}\n{url}",
+        parse_mode="HTML"
     )
 
     if update.effective_chat.id != GROUP_CHAT_ID:
@@ -189,33 +187,33 @@ async def lista(update: Update, context: ContextTypes.DEFAULT_TYPE):
     giorni   = giorni_al_concerto()
 
     await update.message.reply_text(
-        f"📋 *Playlist:* {len(songs)} canzoni\n"
+        f"📋 <b>Playlist:</b> {len(songs)} canzoni\n"
         f"▶️ Prossima in ordine: #{prossima}\n"
         f"🎲 Roulette: {stato}\n"
-        f"📅 Giorni al concerto: *{giorni}*",
-        parse_mode="Markdown"
+        f"📅 Giorni al concerto: <b>{giorni}</b>",
+        parse_mode="HTML"
     )
 
 
 async def mio_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     await update.message.reply_text(
-        f"📌 *Chat ID:* `{chat.id}`\n"
+        f"📌 <b>Chat ID:</b> <code>{chat.id}</code>\n"
         f"📛 Nome: {chat.title or chat.first_name}",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎵 *Comandi disponibili:*\n\n"
+        "🎵 <b>Comandi disponibili:</b>\n\n"
         "/canzone       — prossima canzone in ordine\n"
         "/random        — canzone casuale (manuale)\n"
         "/startroulette — avvia roulette automatica\n"
         "/stoproulette  — ferma roulette automatica\n"
         "/lista         — stato playlist e roulette\n"
         "/help          — questo messaggio",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 
@@ -230,7 +228,6 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # Messaggio giornaliero alle 13:00 ora italiana
     app.job_queue.run_daily(
         buongiorno,
         time=ORE_BUONGIORNO,
@@ -246,7 +243,7 @@ def main():
     app.add_handler(CommandHandler("help",          help_cmd))
 
     print("🤖 Bot avviato! Premi CTRL+C per fermarlo.")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
