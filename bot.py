@@ -68,14 +68,9 @@ async def buongiorno(context):
     if not songs:
         return
 
-    progress = load_progress()
-    index    = progress["index"] % len(songs)
-    url      = songs[index]
-
-    progress["index"] = index + 1
-    save_progress(progress)
-
     giorni = giorni_al_concerto()
+    index  = giorni % len(songs)
+    url    = songs[index]
     titolo = html.escape(await get_youtube_title(url))
 
     testo = (
